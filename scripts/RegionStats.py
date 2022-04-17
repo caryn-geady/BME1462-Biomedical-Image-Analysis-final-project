@@ -5,114 +5,281 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import stats
-from statannot import add_stat_annotation
-import matplotlib.pyplot as plt
-
 from statannotations.Annotator import Annotator
 
+def CreateBP(DataFrame):
+    ''' (Dataframe) --> None
+
+    Creates box plots of volume, intensity, and entropy from the 3 response groups defined by the ResponseAssignment.py script
+    '''
+
+    # filter DF to only contain baseline image data
+    DataFrame = DataFrame.loc[(DataFrame['TIMEPT'] == 'BL')]
+    
+    # Divide DF into volume (d1), intensity (d2), and entropy (d3)
+    d1= DataFrame[DataFrame['variable'].str.contains('VOL')]
+    d2 = DataFrame[DataFrame['variable'].str.contains('mu')]
+    d3 = DataFrame[DataFrame['variable'].str.contains('S')]
+
+    # Assign regions for intensity and entropy data
+    # Region 1 = whole lesion, 2 = core, 3 = internal rim, 4 = external rim
+    d2a = d2[d2['variable'].str.contains('lesion')].assign(Region = 1)
+    d2b = d2[d2['variable'].str.contains('core')].assign(Region = 2)
+    d2c = d2[d2['variable'].str.contains('interior')].assign(Region = 3)
+    d2d = d2[d2['variable'].str.contains('exterior')].assign(Region = 4)
+
+    d3a = d3[d3['variable'].str.contains('lesion')].assign(Region = 1)
+    d3b = d3[d3['variable'].str.contains('core')].assign(Region = 2)
+    d3c = d3[d3['variable'].str.contains('interior')].assign(Region = 3)
+    d3d = d3[d3['variable'].str.contains('exterior')].assign(Region = 4)
+
+    # create intensity and entropy dataframes
+    mu = pd.concat([d2a,d2b,d2c,d2d])
+    S = pd.concat([d3a,d3b,d3c,d3d])
+
+    # Figure 1 - Baseline lesion volume comparison
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots()
+
+    ax = sns.boxplot(data=d1, 
+                    x = 'Response', y = 'value', 
+                    order = ['Growth','Reduction','No Change'], 
+                    ax = ax)
+    x = "Response"
+    y = "value"
+    pairs=[('Reduction','No Change'),('Reduction','Growth'),('No Change','Growth')]
+    annotator = Annotator(ax, pairs, data=d1, x=x, y=y)
+    annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
+    annotator.apply_and_annotate()
+    ax.set_title('Baseline Tumour Volume', fontsize = fs+2)
+    ax.set_xlabel('Region: Whole Lesion', fontsize = fs)
+    ax.set_xticklabels(labels = '', fontsize = fs)
+    ax.set_ylabel('Volume ($cm^3$)', fontsize = fs)
+    plt.savefig('Figure1.png',bbox_inches = 'tight')
+
+    # Figure 2 - Mean CT intensity comparison
+    fig, ax = plt.subplots()
+    pairs=[
+        [(1,'Reduction'),(1,'No Change')],
+        [(1,'Reduction'),(1,'Growth')],
+        [(1,'No Change'),(1,'Growth')],
+
+        [(2,'Reduction'),(2,'No Change')],
+        [(2,'Reduction'),(2,'Growth')],
+        [(2,'No Change'),(2,'Growth')],
+
+        [(3,'Reduction'),(3,'No Change')],
+        [(3,'Reduction'),(3,'Growth')],
+        [(3,'No Change'),(3,'Growth')],
+
+        [(4,'Reduction'),(4,'No Change')],
+        [(4,'Reduction'),(4,'Growth')],
+        [(4,'No Change'),(4,'Growth')],
+        ]
+    hue_plot_params = {
+        'data': mu,
+        'x': 'Region',
+        'y': 'value',
+        'hue': 'Response'
+    }
+    ax = sns.boxplot(ax = ax,**hue_plot_params)
+    annotator = Annotator(ax,pairs,**hue_plot_params)
+    annotator.configure(test = "Mann-Whitney", text_format='star', loc='inside').apply_and_annotate()
+    ax.set_title('Mean CT Intensity', fontsize = fs+2)
+    ax.set_xlabel('Region', fontsize = fs)
+    ax.set_xticklabels(labels = ['Whole Lesion', 'Core','Interior Rim', 'Exterior Rim'], fontsize = fs)
+    ax.set_ylabel('CT intensity (HU)', fontsize = fs)
+    ax.set_ylim(-900,500)
+    ax.get_legend().remove()
+    plt.savefig('Figure2.png',bbox_inches = 'tight')
+
+    # Figure 3 - Entropy comparison
+    fig, ax = plt.subplots()
+    pairs=[
+        [(1,'Reduction'),(1,'No Change')],
+        [(1,'Reduction'),(1,'Growth')],
+        [(1,'No Change'),(1,'Growth')],
+
+        [(2,'Reduction'),(2,'No Change')],
+        [(2,'Reduction'),(2,'Growth')],
+        [(2,'No Change'),(2,'Growth')],
+
+        [(3,'Reduction'),(3,'No Change')],
+        [(3,'Reduction'),(3,'Growth')],
+        [(3,'No Change'),(3,'Growth')],
+
+        [(4,'Reduction'),(4,'No Change')],
+        [(4,'Reduction'),(4,'Growth')],
+        [(4,'No Change'),(4,'Growth')],
+        ]
+    hue_plot_params = {
+        'data': S,
+        'x': 'Region',
+        'y': 'value',
+        'hue': 'Response'
+    }
+    ax = sns.boxplot(ax = ax,**hue_plot_params)
+    annotator = Annotator(ax,pairs,**hue_plot_params)
+    annotator.configure(test = "Mann-Whitney", text_format='star', loc='inside').apply_and_annotate()
+    ax.set_title('Entropy', fontsize = fs+2)
+    ax.set_xlabel('Region', fontsize = fs)
+    ax.set_xticklabels(labels = ['Whole Lesion', 'Core','Interior Rim', 'Exterior Rim'], fontsize = fs)
+    ax.set_ylabel('Entropy (1)', fontsize = fs)
+    ax.set_ylim(1,3)
+    ax.get_legend().remove()
+    plt.savefig('Figure3.png',bbox_inches = 'tight')
 
 
+def StatsTable(DataFrame):
+    ''' (Dataframe) -> Dataframe
 
-df = pd.read_csv('data.csv')
+    Returns a dataframe containing the statistical test results between the 3 response groups defined by the ResponseAssignment.py script
+    '''
+    # filter DF to only contain baseline image data
+    DataFrame = DataFrame.loc[(DataFrame['TIMEPT'] == 'BL')]
 
-def RegionStats(DataFrame):
+    # Divide DF into volume (d1), intensity (d2), and entropy (d3)
+    d1= DataFrame[DataFrame['variable'].str.contains('VOL')].assign(Region = 1)
+    d2 = DataFrame[DataFrame['variable'].str.contains('mu')]
+    d3 = DataFrame[DataFrame['variable'].str.contains('S')]
 
-    metrics = df['variable'].unique()
-    metrics = np.delete(metrics,0)
-    i = 0
-    Met = []
-    Reg = []
-    PosResp_count = []
-    NonResp_count = []
-    NegResp_count = []
-    PosResp_Norm_pv = []
-    NonResp_Norm_pv = []
-    NegResp_Norm_pv = []
-    Mw1_pv = []
-    Mw2_pv = []
-    Mw3_pv = []
+    # Assign regions for intensity and entropy data
+    # Region 1 = whole lesion, 2 = core, 3 = internal rim, 4 = external rim
+    d2a = d2[d2['variable'].str.contains('lesion')].assign(Region = 1)
+    d2b = d2[d2['variable'].str.contains('core')].assign(Region = 2)
+    d2c = d2[d2['variable'].str.contains('interior')].assign(Region = 3)
+    d2d = d2[d2['variable'].str.contains('exterior')].assign(Region = 4)
 
-    for metric in metrics:
-        # visualizing the intensity distributions
-        plt.style.use('dark_background')
-        fig, ax = plt.subplots()
-        ax = sns.boxplot(data=df.loc[(df['TIMEPT'] == 'BL') & (df['variable'] == metric) & (df['Response'] != 9)], x = 'Response', y = 'value', order = ['r','n','g'])
-        x = "Response"
-        y = "value"
-        order = ['r','n','g']
-        pairs=[('r','n'),('r','g'),('n','g')]
-        test = df.loc[(df['TIMEPT'] == 'BL') & (df['variable'] == metric) & (df['Response'] != 9)]
-        annotator = Annotator(ax, pairs, data=test, x=x, y=y, order=order)
-        annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
-        annotator.apply_and_annotate()
+    d3a = d3[d3['variable'].str.contains('lesion')].assign(Region = 1)
+    d3b = d3[d3['variable'].str.contains('core')].assign(Region = 2)
+    d3c = d3[d3['variable'].str.contains('interior')].assign(Region = 3)
+    d3d = d3[d3['variable'].str.contains('exterior')].assign(Region = 4)
 
-        if 'VOL' in metric:
-            ax.set_title('Baseline tumour volume', fontsize = fs+2)
-            ax.set_xlabel('', fontsize = fs)
-            ax.set_xticklabels(labels = ['Volume Reduced', 'No Response','Volume Increased'], fontsize = fs)
-            ax.set_ylabel('Volume ($cm^3$)', fontsize = fs)
-            plt.savefig('Figure{0}.png'.format(i),bbox_inches = 'tight')
-        elif 'mu' in metric:
-            x = metric.split(' ')[0]
-            ax.set_title('CT intensity in {0}'.format(x), fontsize = fs+2)
-            ax.set_xlabel('', fontsize = fs)
-            ax.set_xticklabels(labels = ['Volume Reduced', 'No Response','Volume Increased'], fontsize = fs)
-            ax.set_ylabel('CT intensity (HU)', fontsize = fs)
-            ax.set_ylim(-900,400)
-            plt.savefig('Figure{0}.png'.format(i),bbox_inches = 'tight')
-        elif 'S' in metric:
-            x = metric.split(' ')[0]
-            ax.set_title('Entropy in {0}'.format(x), fontsize = fs+2)
-            ax.set_xlabel('', fontsize = fs)
-            ax.set_xticklabels(labels = ['Volume Reduced', 'No Response','Volume Increased'], fontsize = fs)
-            ax.set_ylabel('Entropy (1)', fontsize = fs)
-            ax.set_ylim(1,3.0)
-            plt.savefig('Figure{0}.png'.format(i),bbox_inches = 'tight')
+    # create intensity and entropy dataframes
+    mu = pd.concat([d2a,d2b,d2c,d2d])
+    S = pd.concat([d3a,d3b,d3c,d3d])
+
+    # define lists to store parameter values
+    Metric = []
+    Region = []
+    Sample_Count_Growth = []
+    Sample_Count_Reduction = []
+    Sample_Count_NoChange = []
+    Normality_Growth = []
+    Normality_Reduction =[]
+    Normality_NoChange = []
+    MannWhitney_Growth_Reduction = []
+    MannWhitney_Growth_NoChange = []
+    MannWhitney_Reduction_NoChange = []
 
 
+    # Loop through different regions for each metric
 
-        # t-test between the rim and perivascular intensity calculations
-        positive_responders = df.loc[(df['TIMEPT'] == 'BL') & (df['variable'] == metric) & (df['Response'] == 'r')]['value'].values
-        non_responders = df.loc[(df['TIMEPT'] == 'BL') & (df['variable'] == metric) & (df['Response'] == 'n')]['value'].values
-        negative_responders = df.loc[(df['TIMEPT'] == 'BL') & (df['variable'] == metric) & (df['Response'] == 'g')]['value'].values
+    # volume dataframe
+    for metric in d1['variable'].unique():
+        
+        # keep track of the metric and region
+        Metric.append('Lesion Volume')
+        Region.append('lesion')
 
-        positive_responders = positive_responders[~np.isnan(positive_responders)]
-        non_responders = non_responders[~np.isnan(non_responders)]
-        negative_responders = negative_responders[~np.isnan(negative_responders)]
+        # divide into different response groups
+        Response_Growth = d1.loc[(df['variable'] == metric) & (df['Response'] == 'Growth')]['value'].values
+        Response_Reduction = d1.loc[(df['variable'] == metric) & (df['Response'] == 'Reduction')]['value'].values
+        Response_NoChange = d1.loc[(df['variable'] == metric) & (df['Response'] == 'No Change')]['value'].values
+
+        # keep track of sample size for each group
+        Sample_Count_Growth.append(len(Response_Growth))
+        Sample_Count_Reduction.append(len(Response_Reduction))
+        Sample_Count_NoChange.append(len(Response_NoChange))
+
+        # Normality test for the different groups
+        Normality_Growth.append(stats.shapiro(Response_Growth).pvalue)
+        Normality_Reduction.append(stats.shapiro(Response_Reduction).pvalue)
+        Normality_NoChange.append(stats.shapiro(Response_NoChange).pvalue)
+
+        # mann-whitney u test for the different groups
+        MannWhitney_Growth_Reduction.append(stats.mannwhitneyu(Response_Growth,Response_Reduction).pvalue)
+        MannWhitney_Growth_NoChange.append(stats.mannwhitneyu(Response_Growth,Response_NoChange).pvalue)
+        MannWhitney_Reduction_NoChange.append(stats.mannwhitneyu(Response_Reduction,Response_NoChange).pvalue)
+    
+    # intensity dataframe
+    for metric in mu['variable'].unique():
+        
+        # keep track of the metric and region
+        Metric.append('Intensity')
+        Region.append(metric.split(' ')[0])
+
+        # divide into different response groups
+        Response_Growth = mu.loc[(df['variable'] == metric) & (df['Response'] == 'Growth')]['value'].values
+        Response_Reduction = mu.loc[(df['variable'] == metric) & (df['Response'] == 'Reduction')]['value'].values
+        Response_NoChange = mu.loc[(df['variable'] == metric) & (df['Response'] == 'No Change')]['value'].values
+
+        # keep track of sample size for each group
+        Sample_Count_Growth.append(len(Response_Growth))
+        Sample_Count_Reduction.append(len(Response_Reduction))
+        Sample_Count_NoChange.append(len(Response_NoChange))
+
+        # Normality test for the different groups
+        Normality_Growth.append(stats.shapiro(Response_Growth).pvalue)
+        Normality_Reduction.append(stats.shapiro(Response_Reduction).pvalue)
+        Normality_NoChange.append(stats.shapiro(Response_NoChange).pvalue)
+
+        # mann-whitney u test for the different groups
+        MannWhitney_Growth_Reduction.append(stats.mannwhitneyu(Response_Growth,Response_Reduction).pvalue)
+        MannWhitney_Growth_NoChange.append(stats.mannwhitneyu(Response_Growth,Response_NoChange).pvalue)
+        MannWhitney_Reduction_NoChange.append(stats.mannwhitneyu(Response_Reduction,Response_NoChange).pvalue)
+    
+    # entropy dataframe
+    for metric in S['variable'].unique():
+        
+        # keep track of the metric and region
+        Metric.append('Entropy')
+        Region.append(metric.split(' ')[0])
+
+        # divide into different response groups
+        Response_Growth = S.loc[(df['variable'] == metric) & (df['Response'] == 'Growth')]['value'].values
+        Response_Reduction = S.loc[(df['variable'] == metric) & (df['Response'] == 'Reduction')]['value'].values
+        Response_NoChange = S.loc[(df['variable'] == metric) & (df['Response'] == 'No Change')]['value'].values
+
+        # keep track of sample size for each group
+        Sample_Count_Growth.append(len(Response_Growth))
+        Sample_Count_Reduction.append(len(Response_Reduction))
+        Sample_Count_NoChange.append(len(Response_NoChange))
+
+        # Normality test for the different groups
+        Normality_Growth.append(stats.shapiro(Response_Growth).pvalue)
+        Normality_Reduction.append(stats.shapiro(Response_Reduction).pvalue)
+        Normality_NoChange.append(stats.shapiro(Response_NoChange).pvalue)
+
+        # mann-whitney u test for the different groups
+        MannWhitney_Growth_Reduction.append(stats.mannwhitneyu(Response_Growth,Response_Reduction).pvalue)
+        MannWhitney_Growth_NoChange.append(stats.mannwhitneyu(Response_Growth,Response_NoChange).pvalue)
+        MannWhitney_Reduction_NoChange.append(stats.mannwhitneyu(Response_Reduction,Response_NoChange).pvalue)
 
 
-        #ttest = stats.ttest_ind(positive_responders, negative_responders, equal_var=False)
-        manwit1 = stats.mannwhitneyu(positive_responders,non_responders)
-        manwit2 = stats.mannwhitneyu(positive_responders,negative_responders)
-        manwit3 = stats.mannwhitneyu(non_responders,negative_responders)
-        #kruk = stats.kruskal(positive_responders, non_responders, negative_responders)
-
-        # keep here to inspect result
-        Met.append(metric)
-        Reg.append(metric.split(' ')[0])
-
-        PosResp_count.append(len(positive_responders))
-        NonResp_count.append(len(non_responders))
-        NegResp_count.append(len(negative_responders))
-
-        PosResp_Norm_pv.append(stats.shapiro(positive_responders).pvalue)
-        NonResp_Norm_pv.append(stats.shapiro(non_responders).pvalue)
-        NegResp_Norm_pv.append(stats.shapiro(negative_responders).pvalue)
-
-
-        Mw1_pv.append(manwit1.pvalue)
-        Mw2_pv.append(manwit2.pvalue)
-        Mw3_pv.append(manwit3.pvalue)
-        i+=1
-    results = pd.DataFrame(list(zip(Met,Reg,PosResp_count,NonResp_count,NegResp_count,PosResp_Norm_pv,NonResp_Norm_pv,NegResp_Norm_pv,Mw1_pv,Mw2_pv,Mw3_pv)),
-               columns =['Metrics', 'Region','Positive Responder Sample Size','Non-Responder Sample Size','Negative Responder Sample Size',
-               'Responder Normality P-value', 'Non-Responder Normality P-value','Negative Responder Normality P-value', 'Reduction/No Response P-value', 'Reduction/Increase P-value', 'No Response/Increase P-value'])
+    results = pd.DataFrame(list(zip(Metric,
+                                    Region,
+                                    Sample_Count_Growth, Sample_Count_Reduction, Sample_Count_NoChange, 
+                                    Normality_Growth, Normality_Reduction, Normality_NoChange,
+                                    MannWhitney_Growth_Reduction, MannWhitney_Growth_NoChange, MannWhitney_Reduction_NoChange)),
+               columns =['Metrics',
+                         'Region',
+                         'Sample Size: Growth', 'Sample Size: Reduction','Sample Size: No Change',
+                         'Shapiro Wilk P-Value: Growth','Shapiro Wilk P-Value: Reduction','Shapiro Wilk P-Value: No Change',
+                         'Mann-Whitney P-Value: G-R', 'Mann-Whitney P-Value: G-NC', 'Mann-Whitney P-Value: R-NC'
+               ])
     return results
 
+# Read in output from Response Assignment script
+df = pd.read_csv('data.csv')
 
+# basic font size for the plots
 fs = 12
 
-results = RegionStats(df)
-results.to_csv('Results.csv')
+# Call function to create box plots
+CreateBP(df)
+
+table = StatsTable(df)
+table.to_csv('ResultsTable.csv')
 
         
