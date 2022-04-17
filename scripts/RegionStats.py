@@ -50,7 +50,7 @@ def CreateBP(DataFrame):
     annotator = Annotator(ax, pairs, data=d1, x=x, y=y)
     annotator.configure(test='Mann-Whitney', text_format='star', loc='inside')
     annotator.apply_and_annotate()
-    ax.set_title('Baseline Tumour Volume', fontsize = fs+2)
+    ax.set_title('Baseline Tumor Volume', fontsize = fs+2)
     ax.set_xlabel('Region: Whole Lesion', fontsize = fs)
     ax.set_xticklabels(labels = '', fontsize = fs)
     ax.set_ylabel('Volume ($cm^3$)', fontsize = fs)
