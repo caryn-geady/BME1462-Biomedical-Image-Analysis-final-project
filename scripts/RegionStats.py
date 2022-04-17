@@ -38,7 +38,6 @@ def CreateBP(DataFrame):
     S = pd.concat([d3a,d3b,d3c,d3d])
 
     # Figure 1 - Baseline lesion volume comparison
-    plt.style.use('dark_background')
     fig, ax = plt.subplots()
 
     ax = sns.boxplot(data=d1, 
